@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Magical Universe Pro ✨</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
+        canvas { display: block; }
+        #overlay {
+            position: absolute; inset: 0; pointer-events: none;
+            display: flex; flex-direction: column; justify-content: space-between; z-index: 10;
+        }
+        .header { text-align: center; padding-top: 20px; }
+        .header h1 {
+            color: white; font-size: 1.8rem; letter-spacing: 5px;
+            text-shadow: 0 0 15px #8a2be2; animation: pulse 4s infinite ease-in-out;
+        }
+        .header p { color: #aaa; font-size: 0.7rem; letter-spacing: 2px; margin-top: 5px; }
+        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+    </style>
+</head>
+<body>
+
+<div id="overlay">
+    <div class="header">
+        <h1>MAGICAL UNIVERSE ✨</h1>
+        <p>MANTÉN PRESIONADO PARA EL HECHIZO</p>
+    </div>
+</div>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// --- ESCENA Y CONFIGURACIÓN ---
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x050010, 0.012);
+
+const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 2000);
+camera.position.set(0, 10, 35);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.8));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.4;
+
+// --- VARIABLES DE ESTADO ---
+let speedFactor = 1;
+let targetFOV = 65;
+let isWarping = false;
+
+// --- TEXTURA DE PARTÍCULA ---
+function createPTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64; canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createRadialGradient(32,32,0, 32,32,32);
+    grad.addColorStop(0, 'white');
+    grad.addColorStop(0.4, 'rgba(100,200,255,0.5)');
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad; ctx.fillRect(0,0,64,64);
+    return new THREE.CanvasTexture(canvas);
+}
+const pTex = createPTexture();
+
+// --- NÚCLEO MÁGICO ---
+const core = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(2, 10),
+    new THREE.MeshBasicMaterial({ color: 0xffddaa, wireframe: true })
+);
+scene.add(core);
+
+const glow = new THREE.Sprite(new THREE.SpriteMaterial({ 
+    map: pTex, color: 0xffaa44, transparent: true, blending: THREE.AdditiveBlending 
+}));
+glow.scale.set(15, 15, 1);
+core.add(glow);
+
+// --- RÁFAGA DE HECHIZO (PARTÍCULAS AL HACER CLICK) ---
+const burstGeo = new THREE.BufferGeometry();
+const burstCount = 500;
+const burstPos = new Float32Array(burstCount * 3);
+const burstVel = new Float32Array(burstCount * 3);
+for(let i=0; i<burstCount*3; i++) {
+    burstPos[i] = 0;
+    burstVel[i] = (Math.random() - 0.5) * 2;
+}
+burstGeo.setAttribute('position', new THREE.BufferAttribute(burstPos, 3));
+const burstMat = new THREE.PointsMaterial({ size: 0.5, map: pTex, transparent: true, blending: THREE.AdditiveBlending, color: 0x88ccff, opacity: 0 });
+const burstParticles = new THREE.Points(burstGeo, burstMat);
+scene.add(burstParticles);
+
+// --- GALAXIA ---
+const starCount = 20000;
+const pos = new Float32Array(starCount * 3);
+const cols = new Float32Array(starCount * 3);
+for(let i=0; i<starCount; i++) {
+    const r = Math.random() * 80;
+    const a = (i % 6) / 6 * Math.PI * 2 + r * 0.25;
+    const rand = Math.pow(Math.random(), 2) * 4;
+    pos[i*3] = Math.cos(a) * r + (Math.random()-0.5)*rand;
+    pos[i*3+1] = (Math.random()-0.5)*rand*0.3;
+    pos[i*3+2] = Math.sin(a) * r + (Math.random()-0.5)*rand;
+    const c = new THREE.Color().setHSL(0.65 - (r/80)*0.2, 0.8, 0.6);
+    cols[i*3] = c.r; cols[i*3+1] = c.g; cols[i*3+2] = c.b;
+}
+const galGeo = new THREE.BufferGeometry();
+galGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+galGeo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+const galaxy = new THREE.Points(galGeo, new THREE.PointsMaterial({ 
+    size: 0.08, map: pTex, transparent: true, blending: THREE.AdditiveBlending, vertexColors: true, depthWrite: false 
+}));
+scene.add(galaxy);
+
+// --- FRASES MÁGICAS CON SHADOW RANDOM ---
+const frases = ["Expecto Amorum ✨", "Patronus del Alma 🦌", "Lumos ✨", "Siempre ⚡", "Amortentia ❤️", "Lumos Maxima 💫"];
+const colorsShadow = ['#ff00ff', '#00ffff', '#ffff00', '#ff0000', '#00ff00', '#ffffff'];
+const textGroup = new THREE.Group();
+
+frases.forEach((t, i) => {
+    const canv = document.createElement('canvas');
+    const cx = canv.getContext('2d');
+    canv.width = 1024; canv.height = 128;
+    cx.fillStyle = 'white'; cx.font = 'bold 50px Arial';
+    cx.shadowBlur = 20; 
+    cx.shadowColor = colorsShadow[Math.floor(Math.random() * colorsShadow.length)]; // COLOR RANDOM
+    cx.fillText(t, 20, 80);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canv) }));
+    const ang = (i/frases.length)*Math.PI*2;
+    sprite.position.set(Math.cos(ang)*25, (Math.random()-0.5)*10, Math.sin(ang)*25);
+    sprite.scale.set(10, 1.2, 1);
+    textGroup.add(sprite);
+});
+scene.add(textGroup);
+
+// --- INTERACCIÓN ---
+const activate = () => { isWarping = true; speedFactor = 15; targetFOV = 100; burstMat.opacity = 1; };
+const deactivate = () => { isWarping = false; speedFactor = 1; targetFOV = 65; };
+
+window.addEventListener('mousedown', activate); window.addEventListener('mouseup', deactivate);
+window.addEventListener('touchstart', activate); window.addEventListener('touchend', deactivate);
+
+// --- ANIMACIÓN ---
+const clock = new THREE.Clock();
+function animate() {
+    requestAnimationFrame(animate);
+    const dt = clock.getDelta();
+    const elapsed = clock.getElapsedTime();
+
+    // Estiramiento de cámara (Lerp)
+    camera.fov += (targetFOV - camera.fov) * 0.1;
+    camera.updateProjectionMatrix();
+
+    galaxy.rotation.y += 0.0005 * speedFactor;
+    textGroup.rotation.y -= 0.0008 * speedFactor;
+
+    // Animación de ráfaga de hechizo
+    if(isWarping) {
+        const positions = burstParticles.geometry.attributes.position.array;
+        for(let i=0; i<burstCount*3; i++) {
+            positions[i] += burstVel[i] * 0.5;
+            if(Math.abs(positions[i]) > 50) positions[i] = 0;
+        }
+        burstParticles.geometry.attributes.position.needsUpdate = true;
+    } else {
+        burstMat.opacity *= 0.9;
+    }
+
+    core.rotation.y += 0.01;
+    const pulse = 1 + Math.sin(elapsed * 2) * 0.1;
+    glow.scale.set(15 * pulse, 15 * pulse, 1);
+
+    controls.update();
+    renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
